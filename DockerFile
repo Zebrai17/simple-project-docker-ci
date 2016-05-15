@@ -1,10 +1,47 @@
-FROM jenkins
+FROM ubuntu:14.04
 MAINTAINER rick.doucet@implementingeventsourcingwithfsharp.com
 
-# add the .net code package to the apt-get repos
-RUN sh -c 'echo "deb [arch=amd64] http://apt-mo.trafficmanager.net/repos/dotnet/ trusty main" > /etc/apt/sources.list.d/dotnetdev.list'
-RUN apt-key adv --keyserver apt-mo.trafficmanager.net --recv-keys 417A0893
+#Update the apr-get repos
 RUN apt-get update
+RUN apt-get -y upgrade
 
-# intall .net code
-RUN apt-get install dotnet=1.0.0.001598-1
+RUN apt-get install -y wget
+
+# install server dependencies
+RUN apt-get update
+RUN apt-get install -y openjdk-7-jre-headless
+
+# install build agent dependencies
+RUN apt-get install -y git
+
+# install team city
+RUN wget -c https://download.jetbrains.com/teamcity/TeamCity-9.0.3.tar.gz -O /tmp/TeamCity-9.0.3.tar.gz
+RUN tar -xvf /tmp/TeamCity-9.0.3.tar.gz -C /srv
+RUN rm -rf /tmp/TeamCity-9.0.3.tar.gz
+RUN mkdir /srv/.BuildServer
+
+# create user
+RUN useradd -m teamcity
+RUN chown -R teamcity /srv/TeamCity
+RUN chown -R teamcity /srv/.BuildServer
+
+# create init.d script
+RUN wget https://gist.githubusercontent.com/sandcastle/9282638/raw/teamcity-init.sh -O /etc/init.d/teamcity
+RUN chmod 775 /etc/init.d/teamcity
+RUN update-rc.d teamcity defaults
+
+# download postgres
+RUN mkdir -p /srv/.BuildServer/lib/jdbc
+RUN mkdir -p /srv/.BuildServer/config
+RUN wget http://jdbc.postgresql.org/download/postgresql-9.3-1101.jdbc41.jar -O /srv/.BuildServer/lib/jdbc/postgresql-9.3-1101.jdbc41.jar
+RUN wget https://gist.githubusercontent.com/sandcastle/9282638/raw/postgres.database.properties -O /srv/.BuildServer/config/database.properties
+
+
+RUN nano /etc/nginx/sites-available/teamcity
+RUN rm -rf /etc/nginx/sites-enabled/default
+RUN rm -rf /etc/nginx/sites-available/default
+
+RUN /etc/init.d/nginx start
+RUN /etc/init.d/teamcity start
+
+RUN apt-get remove -y wget
